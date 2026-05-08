@@ -51,9 +51,9 @@ export function isCurrentlyShowing(dateStart, dateEnd) {
 }
 
 export function matchesFilter(show, filter) {
-  const tags = show.tags.map(t => t.toLowerCase())
+  // show.tags vient de qfap_tags, show.universeTags de universe_tags, show.category de univers
+  const tags = [...show.tags, ...(show.universeTags || [])].map(t => t.toLowerCase())
   const cat = (show.category || '').toLowerCase()
-  const title = (show.title || '').toLowerCase()
 
   switch (filter) {
     case 'affiche':

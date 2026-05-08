@@ -6,7 +6,6 @@ export function useShows() {
   const [allShows, setAllShows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [debugInfo, setDebugInfo] = useState(null)
   const [total, setTotal] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeFilters, setActiveFilters] = useState([])
@@ -18,10 +17,8 @@ export function useShows() {
       const result = await fetchTheatreShows({ limit: 100 })
       setAllShows(result.shows)
       setTotal(result.total)
-      if (result._debug) setDebugInfo(result._debug)
     } catch (err) {
       setError(err.message || 'Impossible de charger les spectacles.')
-      if (err.debug) setDebugInfo(err.debug)
     } finally {
       setLoading(false)
     }
@@ -60,7 +57,6 @@ export function useShows() {
     shows: filteredShows,
     loading,
     error,
-    debugInfo,
     total,
     searchQuery,
     setSearchQuery,

@@ -2,69 +2,27 @@ const BASE_URL = 'https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/qu
 const CACHE_KEY = 'theatror_api'
 const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
-// ODS v2.1 : le paramètre `q` fait une recherche full-text sur tous les champs indexés.
-// Le paramètre `where` fonctionne uniquement pour des comparaisons scalaires (dates, nombres).
-// `like` sur un champ `tags` array retourne 400 → utiliser `q` + `refine` à la place.
-
-function buildStrategies(today) {
-  return [
-    // Stratégie 1 : q full-text + filtre date (approche recommandée ODS)
-    {
-      label: 'q=théâtre + where date',
-      params: {
-        q: 'théâtre spectacle comédie',
-        where: `date_end >= "${today}"`,
-        order_by: 'date_start ASC',
-        limit: 100
-      }
-    },
-    // Stratégie 2 : q full-text sans filtre date
-    {
-      label: 'q=théâtre (sans date)',
-      params: {
-        q: 'théâtre spectacle comédie',
-        order_by: 'date_start ASC',
-        limit: 100
-      }
-    },
-    // Stratégie 3 : refine sur le champ tags (facette ODS exacte)
-    {
-      label: 'refine=tags:Théâtre',
-      params: {
-        refine: 'tags:Théâtre',
-        order_by: 'date_start ASC',
-        limit: 100
-      }
-    },
-    // Stratégie 4 : where date uniquement (sans filtre théâtre)
-    {
-      label: 'where date uniquement',
-      params: {
-        where: `date_end >= "${today}"`,
-        order_by: 'date_start ASC',
-        limit: 100
-      }
-    },
-    // Stratégie 5 : aucun filtre — dernier recours
-    {
-      label: 'aucun filtre',
-      params: { limit: 100 }
-    }
-  ]
-}
+// ODS v2.1 : q = full-text search, where = filtre scalaire (dates)
+// Champs réels confirmés : qfap_tags, univers, universe_tags (pas "tags" ni "category")
+const SEARCH_QUERY = 'théâtre spectacle comédie'
 
 function normalizeShow(record) {
-  const tags = parseTags(record.tags)
+  const tags = parseTags(record.qfap_tags)
+  const universeTags = parseTags(record.universe_tags)
+  const category = record.univers || universeTags[0] || ''
+
   const isFree =
     (record.price_type || '').toLowerCase().includes('gratuit') ||
     (record.price_detail || '').toLowerCase().includes('gratuit')
 
   return {
-    id: record.id || (record.title + record.date_start),
+    id: record.id || record.event_id || (record.title + record.date_start),
     title: record.title || 'Sans titre',
     description: stripHtml(record.description || record.lead_text || ''),
     dateStart: record.date_start || null,
     dateEnd: record.date_end || null,
+    occurrences: record.occurrences || null,
+    dateDescription: record.date_description || '',
     venue: record.address_name || '',
     address: [record.address_street, record.address_zipcode, record.address_city]
       .filter(Boolean).join(', '),
@@ -72,12 +30,14 @@ function normalizeShow(record) {
     zipcode: record.address_zipcode || '',
     city: record.address_city || 'Paris',
     tags,
-    category: record.category || '',
-    image: record.cover_url || record.image || null,
+    universeTags,
+    category,
+    image: record.cover_url || null,
     isFree,
     priceDetail: record.price_detail || (isFree ? 'Gratuit' : ''),
     url: record.url || record.contact_url || '',
     transport: record.transport || '',
+    pmr: record.pmr || false,
     coordinates: record.lat_lon
       ? { lat: record.lat_lon.lat, lon: record.lat_lon.lon }
       : null
@@ -113,74 +73,34 @@ function setCache(key, data) {
   try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })) } catch {}
 }
 
-export async function fetchTheatreShows({ offset = 0 } = {}) {
+export async function fetchTheatreShows({ offset = 0, limit = 100 } = {}) {
   const cacheKey = `${CACHE_KEY}_${offset}`
   const cached = getCache(cacheKey)
   if (cached) return cached
 
   const today = new Date().toISOString().split('T')[0]
-  const strategies = buildStrategies(today)
-  const debugInfo = { strategies: [], today }
+  const params = new URLSearchParams({
+    q: SEARCH_QUERY,
+    where: `date_end >= "${today}"`,
+    order_by: 'date_start ASC',
+    limit,
+    offset
+  })
 
-  for (const strategy of strategies) {
-    const params = new URLSearchParams(strategy.params)
-    const url = `${BASE_URL}?${params}`
-    const stratResult = { label: strategy.label, url, status: null, ok: false }
-
-    console.group(`[theatror] ${strategy.label}`)
-    console.log('URL:', url)
-
-    try {
-      const res = await fetch(url)
-      const body = await res.text()
-      stratResult.status = res.status
-
-      if (!res.ok) {
-        let parsed
-        try { parsed = JSON.parse(body) } catch { parsed = body }
-        stratResult.errorBody = parsed
-        console.warn(`HTTP ${res.status}:`, parsed)
-        console.groupEnd()
-        debugInfo.strategies.push(stratResult)
-        continue
-      }
-
-      const json = JSON.parse(body)
-      stratResult.ok = true
-      stratResult.totalCount = json.total_count
-      stratResult.resultCount = (json.results || []).length
-
-      // Log des vrais noms de champs du 1er résultat pour diagnostiquer la structure
-      if (json.results?.[0]) {
-        stratResult.firstRecordFields = Object.keys(json.results[0])
-        console.log('Champs du 1er enregistrement :', stratResult.firstRecordFields)
-        console.log('1er enregistrement :', json.results[0])
-      }
-
-      console.log(`✅ ${json.total_count} résultats, ${stratResult.resultCount} reçus`)
-      console.groupEnd()
-      debugInfo.strategies.push(stratResult)
-      debugInfo.successLabel = strategy.label
-
-      const result = {
-        total: json.total_count || 0,
-        shows: (json.results || []).map(normalizeShow),
-        _debug: debugInfo
-      }
-      setCache(cacheKey, result)
-      return result
-
-    } catch (networkErr) {
-      stratResult.networkError = networkErr.message
-      console.error('Erreur réseau:', networkErr.message)
-      console.groupEnd()
-      debugInfo.strategies.push(stratResult)
-    }
+  const res = await fetch(`${BASE_URL}?${params}`)
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`API ${res.status} — ${body.slice(0, 200)}`)
   }
 
-  const err = new Error('API inaccessible après toutes les stratégies')
-  err.debug = debugInfo
-  throw err
+  const json = await res.json()
+  const result = {
+    total: json.total_count || 0,
+    shows: (json.results || []).map(normalizeShow)
+  }
+
+  setCache(cacheKey, result)
+  return result
 }
 
 export function clearCache() {
