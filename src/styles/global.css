@@ -173,111 +173,52 @@ button {
   color: var(--accent);
 }
 
-/* ─── Search Bar ────────────────────────────────────────────────── */
-.search-bar {
-  padding: 14px 16px 8px;
-  position: sticky;
-  top: var(--header-h);
-  z-index: 50;
-  background: var(--bg);
+/* ─── Filter Select (combobox) ──────────────────────────────────── */
+.filter-select-bar {
+  padding: 14px 16px 12px;
 }
 
-.search-bar__inner {
+.filter-select-wrap {
   position: relative;
-  display: flex;
-  align-items: center;
 }
 
-.search-bar__icon {
-  position: absolute;
-  left: 14px;
-  width: 18px;
-  height: 18px;
-  stroke: var(--text3);
-  stroke-width: 2;
-  fill: none;
-  stroke-linecap: round;
-  pointer-events: none;
-}
-
-.search-bar__input {
+.filter-select {
   width: 100%;
-  padding: 12px 42px 12px 44px;
+  padding: 14px 48px 14px 18px;
   background: var(--bg3);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   color: var(--text);
   font-size: 15px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.search-bar__input::placeholder {
-  color: var(--text3);
-}
-
-.search-bar__input:focus {
-  border-color: var(--accent);
-}
-
-.search-bar__clear {
-  position: absolute;
-  right: 12px;
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--text3);
-  border-radius: 50%;
-  color: var(--bg);
-  font-size: 13px;
-  line-height: 1;
-}
-
-/* ─── Filter Bar ────────────────────────────────────────────────── */
-.filter-bar {
-  display: flex;
-  gap: 8px;
-  padding: 8px 16px 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.filter-bar::-webkit-scrollbar {
-  display: none;
-}
-
-.filter-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  border-radius: 20px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  color: var(--text2);
-  font-size: 13px;
+  font-family: inherit;
   font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.18s;
-  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.18s;
 }
 
-.filter-chip:active {
-  transform: scale(0.95);
-}
-
-.filter-chip.active {
-  background: var(--accent);
+.filter-select:focus {
   border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 16px var(--accent-glow);
 }
 
-.filter-chip__icon {
-  font-size: 14px;
+/* Les options héritent du fond système sur mobile — c'est voulu (picker natif) */
+.filter-select option {
+  background: #1a1a28;
+  color: var(--text);
+  padding: 8px;
+}
+
+.filter-select-chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
 }
 
 /* ─── Show Card ─────────────────────────────────────────────────── */

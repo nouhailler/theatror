@@ -1,77 +1,51 @@
 import { Header } from '../components/Header'
-import { SearchBar } from '../components/SearchBar'
-import { FilterBar } from '../components/FilterBar'
+import { FilterSelect } from '../components/FilterSelect'
 import { ShowCard } from '../components/ShowCard'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { EmptyState } from '../components/EmptyState'
 import { useShows } from '../hooks/useShows'
 
 export function Home() {
-  const {
-    shows,
-    loading,
-    error,
-    searchQuery,
-    setSearchQuery,
-    activeFilters,
-    toggleFilter,
-    clearFilters,
-    reload
-  } = useShows()
-
-  const hasActiveFilters = activeFilters.length > 0 || searchQuery.trim()
+  const { shows, loading, error, activeFilter, setFilter, reload } = useShows()
 
   return (
     <>
       <Header />
       <main className="page">
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
-        <FilterBar activeFilters={activeFilters} onToggle={toggleFilter} />
+        <div className="filter-select-bar">
+          <FilterSelect value={activeFilter} onChange={setFilter} />
+        </div>
 
         {error && (
           <div className="error-banner" role="alert">
             <span>⚠️</span>
             <div>
               <div>{error}</div>
-              <button className="error-banner__retry" onClick={reload}>
-                Réessayer
-              </button>
+              <button className="error-banner__retry" onClick={reload}>Réessayer</button>
             </div>
           </div>
         )}
 
         {loading ? (
           <LoadingSpinner text="Chargement des spectacles…" />
+        ) : shows.length === 0 ? (
+          <EmptyState
+            icon="🔍"
+            title="Aucun spectacle trouvé"
+            text="Essayez un autre filtre."
+            action={activeFilter ? 'Voir tous les spectacles' : undefined}
+            onAction={() => setFilter('')}
+          />
         ) : (
           <>
-            <div className="results-header">
-              <span className="results-count">
-                {shows.length} spectacle{shows.length !== 1 ? 's' : ''}
-              </span>
-              {hasActiveFilters && (
-                <button className="results-clear" onClick={clearFilters}>
-                  Effacer les filtres
-                </button>
-              )}
+            <p className="results-count" style={{ padding: '0 16px 12px' }}>
+              {shows.length} spectacle{shows.length !== 1 ? 's' : ''}
+            </p>
+            <div className="shows-grid">
+              {shows.map(show => (
+                <ShowCard key={show.id} show={show} />
+              ))}
             </div>
-
-            {shows.length === 0 ? (
-              <EmptyState
-                icon="🔍"
-                title="Aucun spectacle trouvé"
-                text={hasActiveFilters
-                  ? 'Essayez de modifier vos filtres ou votre recherche.'
-                  : 'Aucun spectacle disponible pour le moment.'}
-                action={hasActiveFilters ? 'Effacer les filtres' : undefined}
-                onAction={clearFilters}
-              />
-            ) : (
-              <div className="shows-grid">
-                {shows.map(show => (
-                  <ShowCard key={show.id} show={show} />
-                ))}
-              </div>
-            )}
           </>
         )}
       </main>
