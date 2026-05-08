@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theatror-v1'
+const CACHE_NAME = 'theatror-v3'
 const STATIC_ASSETS = [
   '/',
   '/index.html',
