@@ -2,10 +2,11 @@ const BASE_URL = 'https://opendata.paris.fr/api/explore/v2.1/catalog/datasets/qu
 const CACHE_KEY = 'theatror_api'
 const CACHE_TTL = 30 * 60 * 1000 // 30 minutes
 
+// Wildcards ODSQL : * (pas %) en v2.1
 const THEATRE_WHERE =
-  `(tags like "%théâtre%" OR tags like "%theatre%" OR tags like "%spectacle%" OR ` +
-  `tags like "%comédie%" OR tags like "%comedie%" OR tags like "%seul en scène%" OR ` +
-  `tags like "%théâtre contemporain%" OR category like "%Spectacles%")`
+  `(tags like "*théâtre*" OR tags like "*theatre*" OR tags like "*spectacle*" OR ` +
+  `tags like "*comédie*" OR tags like "*comedie*" OR tags like "*seul en scène*" OR ` +
+  `tags like "*théâtre contemporain*" OR category like "*Spectacles*")`
 
 function normalizeShow(record) {
   const tags = parseTags(record.tags)
@@ -82,33 +83,94 @@ function setCache(key, data) {
   }
 }
 
+// Tentatives successives : on retire les clauses une à une pour isoler l'erreur
+const QUERY_STRATEGIES = [
+  // Stratégie 1 : filtre théâtre + date future
+  (today) => ({
+    where: `${THEATRE_WHERE} AND date_end >= "${today}"`,
+    order_by: 'date_start ASC'
+  }),
+  // Stratégie 2 : filtre théâtre sans contrainte de date
+  () => ({
+    where: THEATRE_WHERE,
+    order_by: 'date_start ASC'
+  }),
+  // Stratégie 3 : filtre minimal sur un seul tag
+  () => ({
+    where: 'tags like "*théâtre*"',
+    order_by: 'date_start ASC'
+  }),
+  // Stratégie 4 : aucun filtre (brut, pour vérifier que l'API répond)
+  () => ({})
+]
+
 export async function fetchTheatreShows({ limit = 100, offset = 0 } = {}) {
   const cacheKey = `${CACHE_KEY}_${offset}`
   const cached = getCache(cacheKey)
   if (cached) return cached
 
   const today = new Date().toISOString().split('T')[0]
-  const where = `${THEATRE_WHERE} AND date_end >= date'${today}'`
+  const debugInfo = { strategies: [] }
 
-  const params = new URLSearchParams({
-    where,
-    limit,
-    offset,
-    order_by: 'date_start ASC',
-    timezone: 'Europe/Paris'
-  })
+  for (let i = 0; i < QUERY_STRATEGIES.length; i++) {
+    const queryParams = QUERY_STRATEGIES[i](today)
+    const params = new URLSearchParams({ limit, offset, ...queryParams })
+    const url = `${BASE_URL}?${params}`
 
-  const res = await fetch(`${BASE_URL}?${params}`)
-  if (!res.ok) throw new Error(`Erreur API (${res.status})`)
+    console.group(`[theatror] Stratégie ${i + 1}/${QUERY_STRATEGIES.length}`)
+    console.log('URL:', url)
 
-  const json = await res.json()
-  const result = {
-    total: json.total_count || 0,
-    shows: (json.results || []).map(normalizeShow)
+    let stratResult = { strategy: i + 1, url, params: queryParams }
+
+    try {
+      const res = await fetch(url)
+      const body = await res.text()
+
+      stratResult.status = res.status
+      stratResult.ok = res.ok
+
+      if (!res.ok) {
+        let parsed
+        try { parsed = JSON.parse(body) } catch { parsed = body }
+        stratResult.errorBody = parsed
+        console.warn(`HTTP ${res.status}:`, parsed)
+        console.groupEnd()
+        debugInfo.strategies.push(stratResult)
+        continue // essaie la stratégie suivante
+      }
+
+      const json = JSON.parse(body)
+      stratResult.totalCount = json.total_count
+      stratResult.resultCount = (json.results || []).length
+      console.log(`✅ OK — ${json.total_count} résultats, ${stratResult.resultCount} reçus`)
+      console.groupEnd()
+      debugInfo.strategies.push(stratResult)
+      debugInfo.successStrategy = i + 1
+
+      // Log complet disponible dans la console
+      console.info('[theatror] Debug complet:', debugInfo)
+
+      const result = {
+        total: json.total_count || 0,
+        shows: (json.results || []).map(normalizeShow),
+        _debug: debugInfo
+      }
+      setCache(cacheKey, result)
+      return result
+
+    } catch (networkErr) {
+      stratResult.networkError = networkErr.message
+      console.error('Erreur réseau:', networkErr.message)
+      console.groupEnd()
+      debugInfo.strategies.push(stratResult)
+    }
   }
 
-  setCache(cacheKey, result)
-  return result
+  // Toutes les stratégies ont échoué
+  console.error('[theatror] Toutes les stratégies ont échoué:', debugInfo)
+  const err = new Error('API inaccessible — voir console pour le détail')
+  err.debug = debugInfo
+  throw err
 }
 
 export function clearCache() {

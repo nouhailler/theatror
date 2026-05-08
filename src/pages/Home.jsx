@@ -4,6 +4,7 @@ import { FilterBar } from '../components/FilterBar'
 import { ShowCard } from '../components/ShowCard'
 import { LoadingSpinner } from '../components/LoadingSpinner'
 import { EmptyState } from '../components/EmptyState'
+import { DebugPanel } from '../components/DebugPanel'
 import { useShows } from '../hooks/useShows'
 
 export function Home() {
@@ -11,6 +12,7 @@ export function Home() {
     shows,
     loading,
     error,
+    debugInfo,
     searchQuery,
     setSearchQuery,
     activeFilters,
@@ -39,6 +41,8 @@ export function Home() {
             </div>
           </div>
         )}
+
+        <DebugPanel debugInfo={debugInfo} />
 
         {loading ? (
           <LoadingSpinner text="Chargement des spectacles…" />
