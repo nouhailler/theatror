@@ -37,6 +37,6 @@ export function useShows() {
     total,
     activeFilter,
     setFilter: setActiveFilter,
-    reload
+    reload: load
   }
 }
